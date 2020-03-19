@@ -50,6 +50,10 @@ config EXYNOS4
     select SDHCI
     select USB_EHCI_SYSBUS
 
+config FEABHAS
+    bool
+    select STM32F405_SOC
+
 config HIGHBANK
     bool
     select A9MPCORE
