@@ -41,6 +41,11 @@ static const uint32_t timer_addr[] = {0x40000000, 0x40000400,
 static const uint32_t spi_addr[] = {0x40013000, 0x40003800, 0x40003C00,
                                     0x40013400, 0x40015000, 0x40015400};
 #define EXTI_ADDR 0x40013C00
+static const uint32_t gpio_addr[] = {0x40020000, 0x40020400,
+                                     0x40020800, 0x40020C00,
+                                     0x40021000, 0x40021400,
+                                     0x40021800, 0x40021C00,
+                                     0x40022000};
 
 #define SYSCFG_IRQ 71
 static const int usart_irq[] = {37, 38, 39, 52, 53, 71, 82, 83};
@@ -83,6 +88,13 @@ static void stm32f407_soc_initfn(Object *obj)
     {
         sysbus_init_child_obj(obj, "spi[*]", &s->spi[i], sizeof(s->spi[i]),
                               TYPE_STM32F2XX_SPI);
+    }
+    for (i = 0; i < STM_NUM_GPIOS; i++)
+    {
+        char child_name[8];
+        snprintf(child_name, sizeof(child_name), "gpio[%c]", 'a' + i);
+        sysbus_init_child_obj(obj, child_name, &s->gpio[i], sizeof(s->gpio[i]),
+                              TYPE_STM32F40x_GPIO);
     }
 
     sysbus_init_child_obj(obj, "exti", &s->exti, sizeof(s->exti),
@@ -225,6 +237,23 @@ static void stm32f407_soc_realize(DeviceState *dev_soc, Error **errp)
         sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, spi_irq[i]));
     }
 
+    /* GPIO ports */
+    for (i = 0; i < STM_NUM_GPIOS; i++)
+    {
+        dev = DEVICE(&(s->gpio[i]));
+        object_property_set_bool(OBJECT(&s->gpio[i]), true, "realized", &err);
+        if (err != NULL)
+        {
+            error_propagate(errp, err);
+            return;
+        }
+        busdev = SYS_BUS_DEVICE(dev);
+        sysbus_mmio_map(busdev, 0, gpio_addr[i]);
+        // sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, gpio_irq[i]));
+        /* Pass all GPIOs to the SOC layer so they are available to the board */
+        qdev_pass_gpios(DEVICE(&s->gpio[i]), dev_soc, NULL);
+    }
+
     /* EXTI device */
     dev = DEVICE(&s->exti);
     object_property_set_bool(OBJECT(&s->exti), true, "realized", &err);
@@ -267,15 +296,15 @@ static void stm32f407_soc_realize(DeviceState *dev_soc, Error **errp)
     create_unimplemented_device("timer[9]", 0x40014000, 0x400);
     create_unimplemented_device("timer[10]", 0x40014400, 0x400);
     create_unimplemented_device("timer[11]", 0x40014800, 0x400);
-    create_unimplemented_device("GPIOA", 0x40020000, 0x400);
-    create_unimplemented_device("GPIOB", 0x40020400, 0x400);
-    create_unimplemented_device("GPIOC", 0x40020800, 0x400);
-    create_unimplemented_device("GPIOD", 0x40020C00, 0x400);
-    create_unimplemented_device("GPIOE", 0x40021000, 0x400);
-    create_unimplemented_device("GPIOF", 0x40021400, 0x400);
-    create_unimplemented_device("GPIOG", 0x40021800, 0x400);
-    create_unimplemented_device("GPIOH", 0x40021C00, 0x400);
-    create_unimplemented_device("GPIOI", 0x40022000, 0x400);
+    // create_unimplemented_device("GPIOA", 0x40020000, 0x400);
+    // create_unimplemented_device("GPIOB", 0x40020400, 0x400);
+    // create_unimplemented_device("GPIOC", 0x40020800, 0x400);
+    // create_unimplemented_device("GPIOD", 0x40020C00, 0x400);
+    // create_unimplemented_device("GPIOE", 0x40021000, 0x400);
+    // create_unimplemented_device("GPIOF", 0x40021400, 0x400);
+    // create_unimplemented_device("GPIOG", 0x40021800, 0x400);
+    // create_unimplemented_device("GPIOH", 0x40021C00, 0x400);
+    // create_unimplemented_device("GPIOI", 0x40022000, 0x400);
     create_unimplemented_device("CRC", 0x40023000, 0x400);
     create_unimplemented_device("RCC", 0x40023800, 0x400);
     create_unimplemented_device("Flash Int", 0x40023C00, 0x400);

@@ -33,22 +33,25 @@
 #include "hw/or-irq.h"
 #include "hw/ssi/stm32f2xx_spi.h"
 #include "hw/timer/stm32f2xx_timer.h"
+#include "hw/gpio/stm32f40x_gpio.h"
 
 #define TYPE_STM32F407_SOC "stm32f407-soc"
-#define STM32F407_SOC(obj)                                                     \
+#define STM32F407_SOC(obj) \
   OBJECT_CHECK(STM32F407State, (obj), TYPE_STM32F407_SOC)
 
 #define STM_NUM_USARTS 7
 #define STM_NUM_TIMERS 4
 #define STM_NUM_ADCS 6
 #define STM_NUM_SPIS 6
+#define STM_NUM_GPIOS 9
 
 #define FLASH_BASE_ADDRESS 0x08000000
 #define FLASH_SIZE (1024 * 1024)
 #define SRAM_BASE_ADDRESS 0x20000000
 #define SRAM_SIZE (192 * 1024)
 
-typedef struct STM32F407State {
+typedef struct STM32F407State
+{
   /*< private >*/
   SysBusDevice parent_obj;
   /*< public >*/
@@ -64,6 +67,7 @@ typedef struct STM32F407State {
   qemu_or_irq adc_irqs;
   STM32F2XXADCState adc[STM_NUM_ADCS];
   STM32F2XXSPIState spi[STM_NUM_SPIS];
+  STM32F40xGPIOState gpio[STM_NUM_GPIOS];
 
   MemoryRegion sram;
   MemoryRegion flash;
