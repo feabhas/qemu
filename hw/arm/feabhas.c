@@ -92,6 +92,19 @@ static void gpio_port_handler(void *opaque, int n, int level)
     //     break;
     // }
 }
+static const char *LED_ID[] = {"D6", "D7", "D8", "D9"};
+static void led_irq_handler(void *opaque, int n, int level)
+{
+    switch (level)
+    {
+    case 0:
+        printf("%d:%s Off\n", n, LED_ID[n]);
+        break;
+    case 1:
+        printf("%d:%s On\n", n, LED_ID[n]);
+        break;
+    }
+}
 
 static void
 feabhas_init(MachineState *machine)
@@ -105,51 +118,15 @@ feabhas_init(MachineState *machine)
     qdev_prop_set_string(dev, "cpu-type", ARM_CPU_TYPE_NAME("cortex-m4"));
     object_property_set_bool(OBJECT(dev), true, "realized", &error_fatal);
 
-    // MemoryRegion *mr = sysbus_mmio_get_region(SYS_BUS_DEVICE("gpio[d]"), 0);
-
-    // DeviceState *gpio_d = DEVICE(object_resolve_path("/machine/stm32f407/gpio[d]", NULL));
-    // assert(gpio_d);
-
     STM32F40xGPIOState *gpio_d = &s->gpio[GPIOD];
 
     // // Connect LED to GPIO D pin 8,9,10 & 11
-    qemu_irq *led_irq = qemu_allocate_irqs(gpio_port_handler, NULL, 4);
-    // sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, usart_irq[i]));
-
-    // qdev_connect_gpio_out(DEVICE(&s->adc_irqs), 0,
-    //                       qdev_get_gpio_in(armv7m, ADC_IRQ));
+    // qemu_irq *led_irq = qemu_allocate_irqs(gpio_port_handler, NULL, 4);
+    qemu_irq *led_irq = qemu_allocate_irqs(led_irq_handler, NULL, 4);
     qdev_connect_gpio_out(gpio_d, 8, led_irq[0]);
     qdev_connect_gpio_out(gpio_d, 9, led_irq[1]);
     qdev_connect_gpio_out(gpio_d, 10, led_irq[2]);
     qdev_connect_gpio_out(gpio_d, 11, led_irq[3]);
-
-    // DeviceState *nvic;
-
-    // nvic = qdev_create(NULL, TYPE_ARMV7M);
-    // qdev_prop_set_uint32(nvic, "num-irq", NUM_IRQ_LINES);
-    // qdev_prop_set_string(nvic, "cpu-type", machine->cpu_type);
-    // qdev_prop_set_bit(nvic, "enable-bitband", true);
-    // object_property_set_link(OBJECT(nvic), OBJECT(get_system_memory()),
-    //                          "memory", &error_abort);
-    // /* This will exit with an error if the user passed us a bad cpu_type */
-    // qdev_init_nofail(nvic);
-
-    // qdev_connect_gpio_out_named(nvic, "SYSRESETREQ", 0,
-    //                             qemu_allocate_irq(&do_sys_reset, NULL, 0));
-
-    // DeviceState *gpio_dev[NUM_OF_GPIOS];
-    // for (unsigned i = 0; i < NUM_OF_GPIOS; ++i)
-    // {
-
-    //     gpio_dev[i] = sysbus_create_simple("feabhas", gpio_addr[i],
-    //                                        qdev_get_gpio_in(nvic,
-    //                                                         gpio_irq[i]));
-    //     // for (j = 0; j < 8; j++)
-    //     // {
-    //     //     gpio_in[i][j] = qdev_get_gpio_in(gpio_dev[i], j);
-    //     //     gpio_out[i][j] = NULL;
-    //     // }
-    // }
 
     armv7m_load_kernel(ARM_CPU(first_cpu),
                        machine->kernel_filename,
