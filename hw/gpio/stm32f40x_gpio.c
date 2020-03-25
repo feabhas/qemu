@@ -1,10 +1,7 @@
 /*
  * STM32F40x System-on-Chip general purpose input/output register definition
  *
- * Reference Manual: http://infocenter.nordicsemi.com/pdf/nRF51_RM_v3.0.pdf
- * Product Spec: http://infocenter.nordicsemi.com/pdf/nRF51822_PS_v3.1.pdf
- *
- * Copyright 2018 Steffen Görtz <contrib@steffen-goertz.de>
+ * Copyright 2020 Niall Cooling <nsc@acm.org>
  *
  * This code is licensed under the GPL version 2 or later.  See
  * the COPYING file in the top-level directory.
@@ -18,140 +15,11 @@
 #include "migration/vmstate.h"
 #include "trace.h"
 
-/*
- * Check if the output driver is connected to the direction switch
- * given the current configuration and logic level.
- * It is not differentiated between standard and "high"(-power) drive modes.
- */
-// static bool is_connected(uint32_t config, uint32_t level)
-// {
-//     bool state;
-//     uint32_t drive_config = extract32(config, 8, 3);
-
-//     switch (drive_config)
-//     {
-//     case 0 ... 3:
-//         state = true;
-//         break;
-//     case 4 ... 5:
-//         state = level != 0;
-//         break;
-//     case 6 ... 7:
-//         state = level == 0;
-//         break;
-//     default:
-//         g_assert_not_reached();
-//         break;
-//     }
-
-//     return state;
-// }
-
-// static int pull_value(uint32_t config)
-// {
-//     int pull = extract32(config, 2, 2);
-//     if (pull == STM32F40x_GPIO_PULLDOWN)
-//     {
-//         return 0;
-//     }
-//     else if (pull == STM32F40x_GPIO_PULLUP)
-//     {
-//         return 1;
-//     }
-//     return -1;
-// }
-
-static void update_output_irq(STM32F40xGPIOState *s, size_t i,
-                              bool connected, bool level)
-{
-    // int64_t irq_level = connected ? level : -1;
-    // bool old_connected = extract32(s->old_out_connected, i, 1);
-    // bool old_level = extract32(s->old_out, i, 1);
-
-    // if ((old_connected != connected) || (old_level != level))
-    // {
-    //     qemu_set_irq(s->output[i], irq_level);
-    //     // trace_stm32f40x_gpio_update_output_irq(i, irq_level);
-    // }
-
-    // s->old_out = deposit32(s->old_out, i, 1, level);
-    // s->old_out_connected = deposit32(s->old_out_connected, i, 1, connected);
-}
-
-static void update_state(STM32F40xGPIOState *s)
-{
-    // int pull;
-    // size_t i;
-    // bool connected_out, dir, connected_in, out, in, input;
-
-    // for (i = 0; i < STM32F40x_GPIO_PINS; i++)
-    // {
-    //     pull = pull_value(s->cnf[i]);
-    //     dir = extract32(s->cnf[i], 0, 1);
-    //     connected_in = extract32(s->in_mask, i, 1);
-    //     out = extract32(s->out, i, 1);
-    //     in = extract32(s->in, i, 1);
-    //     input = !extract32(s->cnf[i], 1, 1);
-    //     connected_out = is_connected(s->cnf[i], out) && dir;
-
-    //     if (!input)
-    //     {
-    //         if (pull >= 0)
-    //         {
-    //             /* Input buffer disconnected from external drives */
-    //             s->in = deposit32(s->in, i, 1, pull);
-    //         }
-    //     }
-    //     else
-    //     {
-    //         if (connected_out && connected_in && out != in)
-    //         {
-    //             /* Pin both driven externally and internally */
-    //             qemu_log_mask(LOG_GUEST_ERROR,
-    //                           "GPIO pin %zu short circuited\n", i);
-    //         }
-    //         if (!connected_in)
-    //         {
-    //             /*
-    //              * Floating input: the output stimulates IN if connected,
-    //              * otherwise pull-up/pull-down resistors put a value on both
-    //              * IN and OUT.
-    //              */
-    //             if (pull >= 0 && !connected_out)
-    //             {
-    //                 connected_out = true;
-    //                 out = pull;
-    //             }
-    //             if (connected_out)
-    //             {
-    //                 s->in = deposit32(s->in, i, 1, out);
-    //             }
-    //         }
-    //     }
-    //     update_output_irq(s, i, connected_out, out);
-    // }
-}
-
-/*
- * Direction is exposed in both the DIR register and the DIR bit
- * of each PINs CNF configuration register. Reflect bits for pins in DIR
- * to individual pin configuration registers.
- */
-// static void reflect_dir_bit_in_cnf(STM32F40xGPIOState *s)
-// {
-//     size_t i;
-
-//     uint32_t value = s->dir;
-
-//     for (i = 0; i < STM32F40x_GPIO_PINS; i++)
-//     {
-//         s->cnf[i] = (s->cnf[i] & ~(1UL)) | ((value >> i) & 0x01);
-//     }
-// }
-
 static uint64_t stm32f40x_gpio_read(void *opaque, hwaddr offset, unsigned int size)
 {
     STM32F40xGPIOState *s = STM32F40x_GPIO(opaque);
+    uint64_t base_addr = s->mmio.addr;
+
     uint64_t r = 0;
 
     switch (offset)
@@ -175,7 +43,8 @@ static uint64_t stm32f40x_gpio_read(void *opaque, hwaddr offset, unsigned int si
         r = s->ODR;
         break;
     case STM32F40x_GPIO_REG_BSRR:
-        r = s->BSRR;
+        // Error read-only register
+        // returns 0
         break;
     case STM32F40x_GPIO_REG_LCKR:
         r = s->LCKR;
@@ -193,22 +62,77 @@ static uint64_t stm32f40x_gpio_read(void *opaque, hwaddr offset, unsigned int si
                       __func__, offset);
     }
 
-    trace_stm32f40x_gpio_read(offset, r);
+    trace_stm32f40x_gpio_read(base_addr + offset, r);
 
     return r;
+}
+
+enum MODES
+{
+    Input,
+    Output,
+    AF,
+    Analog
+};
+
+// helper function to setup I/O masks
+static void set_masks(STM32F40xGPIOState *s)
+{
+    uint32_t moder = s->MODER;
+    for (unsigned i = 0; i < 16; ++i)
+    {
+        uint32_t mode = moder & 0x3; // two bits for mode
+        switch (mode)
+        {
+        case Output:
+            s->out_mask |= (1 << i);
+            // fallthrough as outputs read as inputs
+        case Input:
+            s->in_mask |= (1 << i);
+            break;
+        default:
+            // AF and Analog not yet supported
+            s->in_mask &= ~(1 << i);
+            s->out_mask &= ~(1 << i);
+        }
+        moder = moder >> 2; // mode of next gpio pin
+    }
+}
+
+static void ODR_write(STM32F40xGPIOState *s, uint32_t value)
+{
+    s->ODR &= ~(s->out_mask); // clear all output bits
+    s->ODR |= (value & s->out_mask);
+    s->IDR &= ~(s->out_mask); // clear all output bits
+    s->IDR |= (value & s->out_mask);
+}
+
+static void BRR_write(STM32F40xGPIOState *s, uint32_t value)
+{
+    uint32_t set_values = value & 0xFFFF;
+    uint32_t reset_values = (value >> 16) & 0xFFFF;
+
+    s->ODR &= ~(reset_values & s->out_mask);
+    s->ODR |= (set_values & s->out_mask);
+    s->IDR &= ~(reset_values & s->out_mask);
+    s->IDR |= (set_values & s->out_mask);
 }
 
 static void stm32f40x_gpio_write(void *opaque, hwaddr offset,
                                  uint64_t value, unsigned int size)
 {
     STM32F40xGPIOState *s = STM32F40x_GPIO(opaque);
+    uint64_t base_addr = s->mmio.addr;
+    trace_stm32f40x_gpio_write(base_addr + offset, value);
 
-    trace_stm32f40x_gpio_write(offset, value);
+    // TODO
+    // need to check GPIO device is enabled in RCC
 
     switch (offset)
     {
     case STM32F40x_GPIO_REG_MODER:
         s->MODER = value;
+        set_masks(s);
         break;
     case STM32F40x_GPIO_REG_OTYPE:
         s->OTYPER = value;
@@ -220,13 +144,16 @@ static void stm32f40x_gpio_write(void *opaque, hwaddr offset,
         s->PUPDR = value;
         break;
     case STM32F40x_GPIO_REG_IDR:
-        s->IDR = value;
+        // s->IDR = value;
+        // error write-only register
         break;
     case STM32F40x_GPIO_REG_ODR:
-        s->ODR = value;
+        // s->ODR = value;
+        ODR_write(s, value);
         break;
     case STM32F40x_GPIO_REG_BSRR:
-        s->BSRR = value;
+        // s->BSRR = value;
+        BRR_write(s, value);
         break;
     case STM32F40x_GPIO_REG_LCKR:
         s->LCKR = value;
@@ -242,8 +169,6 @@ static void stm32f40x_gpio_write(void *opaque, hwaddr offset,
                       "%s: bad write offset 0x%" HWADDR_PRIx "\n",
                       __func__, offset);
     }
-
-    update_state(s);
 }
 
 static const MemoryRegionOps gpio_ops = {
@@ -257,6 +182,7 @@ static const MemoryRegionOps gpio_ops = {
 static void stm32f40x_gpio_set(void *opaque, int line, int value)
 {
     STM32F40xGPIOState *s = STM32F40x_GPIO(opaque);
+    // uint64_t base_addr = s->mmio.addr;
 
     trace_stm32f40x_gpio_set(line, value);
 
@@ -268,25 +194,18 @@ static void stm32f40x_gpio_set(void *opaque, int line, int value)
     //     s->in = deposit32(s->in, line, 1, value != 0);
     // }
 
-    update_state(s);
+    // update_state(s);
 }
 
 static void stm32f40x_gpio_reset(DeviceState *dev)
 {
     STM32F40xGPIOState *s = STM32F40x_GPIO(dev);
-    // size_t i;
 
-    // s->out = 0;
-    // s->old_out = 0;
-    // s->old_out_connected = 0;
-    // s->in = 0;
-    // s->in_mask = 0;
-    // s->dir = 0;
+    uint64_t base_addr = s->mmio.addr;
 
-    // for (i = 0; i < STM32F40x_GPIO_PINS; i++)
-    // {
-    //     s->cnf[i] = 0x00000002;
-    // }
+    trace_stm32f40x_gpio_reset(s->mmio.name, base_addr);
+
+    // everything defaults to input
     s->MODER = 0;
     s->OTYPER = 0;
     s->OSPEEDR = 0;
@@ -297,6 +216,19 @@ static void stm32f40x_gpio_reset(DeviceState *dev)
     s->LCKR = 0;
     s->AFR[0] = 0;
     s->AFR[1] = 0;
+
+    if (base_addr == 0x40020000)
+    { // GPIOA
+        s->MODER = 0xA8000000;
+        // s->PUPDR =
+    }
+    if (base_addr == 0x40020400)
+    { // GPIOB
+        s->MODER = 0x00000280;
+        // s->OSPEEDR =
+        // s->PUPDR =
+    }
+    set_masks(s);
 }
 
 static const VMStateDescription vmstate_stm32f40x_gpio = {

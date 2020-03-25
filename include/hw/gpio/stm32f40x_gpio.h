@@ -1,24 +1,9 @@
 /*
  * STM32F40x System-on-Chip general purpose input/output register definition
  *
- * QEMU interface:
- * + sysbus MMIO regions 0: GPIO registers
- * + Unnamed GPIO inputs 0-31: Set tri-state input level for GPIO pin.
- *   Level -1: Externally Disconnected/Floating; Pull-up/down will be regarded
- *   Level 0: Input externally driven LOW
- *   Level 1: Input externally driven HIGH
- * + Unnamed GPIO outputs 0-31:
- *   Level -1: Disconnected/Floating
- *   Level 0: Driven LOW
- *   Level 1: Driven HIGH
- *
  * Accuracy of the peripheral model:
- * + The STM32F40x GPIO output driver supports two modes, standard and
- * high-current mode. These different drive modes are not modeled and handled
- * the same.
- * + Pin SENSEing is not modeled/implemented.
  *
- * Copyright 2018 Steffen Görtz <contrib@steffen-goertz.de>
+ * Copyright 2020 Niall Cooling <nsc@acm.org>
  *
  * This code is licensed under the GPL version 2 or later.  See
  * the COPYING file in the top-level directory.
@@ -60,7 +45,6 @@ typedef struct STM32F40xGPIOState {
 
   //   uint32_t out;
   //   uint32_t in;
-  //   uint32_t in_mask;
   //   uint32_t dir;
   //   uint32_t cnf[STM32F40x_GPIO_PINS];
 
@@ -76,6 +60,9 @@ typedef struct STM32F40xGPIOState {
   uint32_t BSRR;
   uint32_t LCKR;
   uint32_t AFR[2];
+
+  uint16_t in_mask;
+  uint16_t out_mask;
 
 } STM32F40xGPIOState;
 

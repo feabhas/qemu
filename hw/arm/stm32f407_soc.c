@@ -158,6 +158,23 @@ static void stm32f407_soc_realize(DeviceState *dev_soc, Error **errp)
     sysbus_mmio_map(busdev, 0, SYSCFG_ADD);
     sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, SYSCFG_IRQ));
 
+    /* GPIO ports */
+    for (i = 0; i < STM_NUM_GPIOS; i++)
+    {
+        dev = DEVICE(&(s->gpio[i]));
+        object_property_set_bool(OBJECT(&s->gpio[i]), true, "realized", &err);
+        if (err != NULL)
+        {
+            error_propagate(errp, err);
+            return;
+        }
+        busdev = SYS_BUS_DEVICE(dev);
+        sysbus_mmio_map(busdev, 0, gpio_addr[i]);
+        // sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, gpio_irq[i]));
+        /* Pass all GPIOs to the SOC layer so they are available to the board */
+        // qdev_pass_gpios(DEVICE(&s->gpio[i]), dev_soc, NULL);
+    }
+
     /* Attach UART (uses USART registers) and USART controllers */
     for (i = 0; i < STM_NUM_USARTS; i++)
     {
@@ -235,23 +252,6 @@ static void stm32f407_soc_realize(DeviceState *dev_soc, Error **errp)
         busdev = SYS_BUS_DEVICE(dev);
         sysbus_mmio_map(busdev, 0, spi_addr[i]);
         sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, spi_irq[i]));
-    }
-
-    /* GPIO ports */
-    for (i = 0; i < STM_NUM_GPIOS; i++)
-    {
-        dev = DEVICE(&(s->gpio[i]));
-        object_property_set_bool(OBJECT(&s->gpio[i]), true, "realized", &err);
-        if (err != NULL)
-        {
-            error_propagate(errp, err);
-            return;
-        }
-        busdev = SYS_BUS_DEVICE(dev);
-        sysbus_mmio_map(busdev, 0, gpio_addr[i]);
-        // sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, gpio_irq[i]));
-        /* Pass all GPIOs to the SOC layer so they are available to the board */
-        qdev_pass_gpios(DEVICE(&s->gpio[i]), dev_soc, NULL);
     }
 
     /* EXTI device */
