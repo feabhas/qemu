@@ -12,3 +12,4 @@ stm32f40x_gpio_write(uint64_t offset, uint64_t value) "offset 0x%" PRIx64 " valu
 stm32f40x_gpio_set(int64_t line, int64_t value) "line %" PRIi64 " value %" PRIi64
 stm32f40x_gpio_update_output_irq(int64_t line, int64_t value) "line %" PRIi64 " value %" PRIi64
 stm32f40x_gpio_reset(const char* name, uint64_t addr) "%s: RESET 0x%" PRIx64
+stm32f40x_gpio_update(uint64_t bit_changes) "BITS 0x%" PRIx64

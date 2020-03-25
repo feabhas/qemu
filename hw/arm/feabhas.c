@@ -29,6 +29,7 @@
 #include "qemu/error-report.h"
 #include "hw/arm/stm32f407_soc.h"
 #include "hw/arm/boot.h"
+#include "hw/irq.h"
 
 #define NUM_IRQ_LINES 64
 #define NUM_OF_GPIOS 4
@@ -36,11 +37,91 @@
 static const uint32_t gpio_addr[NUM_OF_GPIOS] =
     {0x40020000, 0x40020400, 0x40020800, 0x40020c00};
 
-static void feabhas_init(MachineState *machine)
+enum GPIOS
+{
+    GPIOA,
+    GPIOB,
+    GPIOC,
+    GPIOD,
+    GPIOE,
+    GPIOF,
+    GPIOG,
+    GPIOH,
+    GPIOI
+};
+
+static void gpio_port_handler(void *opaque, int n, int level)
+{
+    // Stm32FeabhasWms *s = (Stm32FeabhasWms *)opaque;
+
+    printf("n:%d l:%d\n", n, level);
+
+    // static unsigned ss_value = 0;
+    // switch (n)
+    // {
+    // case 0:
+    // case 1:
+    // case 2:
+    // case 3:
+    // {
+    //     if (level == 0)
+    //     {
+    //         s->ss_value &= ~(1 << n);
+    //     }
+    //     else
+    //     {
+    //         s->ss_value |= (1 << n);
+    //     }
+    //     printf("7-Segment: %u\n", s->ss_value);
+    // }
+    // break;
+    // case 5:
+    //     printf("Motor is %s\n", !level ? "OFF" : "ON");
+    //     break;
+    // case 6:
+    //     printf("Motor is %s\n", !level ? "CLK" : "ACLK");
+    //     break;
+    // case 7:
+    //     printf("Latch is %s\n", !level ? "LOW" : "HIGH");
+    //     s->latch = (bool)level;
+    //     break;
+    // case 8:
+    //     printf("Buzzer is %s\n", !level ? "OFF" : "ON");
+    //     break;
+    // default:
+    //     break;
+    // }
+}
+
+static void
+feabhas_init(MachineState *machine)
 {
     DeviceState *dev = qdev_create(NULL, TYPE_STM32F407_SOC);
+
+    // DeviceState *dev = DEVICE(obj);
+    STM32F407State *s = STM32F407_SOC(dev);
+    // SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
+
     qdev_prop_set_string(dev, "cpu-type", ARM_CPU_TYPE_NAME("cortex-m4"));
     object_property_set_bool(OBJECT(dev), true, "realized", &error_fatal);
+
+    // MemoryRegion *mr = sysbus_mmio_get_region(SYS_BUS_DEVICE("gpio[d]"), 0);
+
+    // DeviceState *gpio_d = DEVICE(object_resolve_path("/machine/stm32f407/gpio[d]", NULL));
+    // assert(gpio_d);
+
+    STM32F40xGPIOState *gpio_d = &s->gpio[GPIOD];
+
+    // // Connect LED to GPIO D pin 8,9,10 & 11
+    qemu_irq *led_irq = qemu_allocate_irqs(gpio_port_handler, NULL, 4);
+    // sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, usart_irq[i]));
+
+    // qdev_connect_gpio_out(DEVICE(&s->adc_irqs), 0,
+    //                       qdev_get_gpio_in(armv7m, ADC_IRQ));
+    qdev_connect_gpio_out(gpio_d, 8, led_irq[0]);
+    qdev_connect_gpio_out(gpio_d, 9, led_irq[1]);
+    qdev_connect_gpio_out(gpio_d, 10, led_irq[2]);
+    qdev_connect_gpio_out(gpio_d, 11, led_irq[3]);
 
     // DeviceState *nvic;
 

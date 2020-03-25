@@ -15,57 +15,22 @@
 #include "migration/vmstate.h"
 #include "trace.h"
 
-static uint64_t stm32f40x_gpio_read(void *opaque, hwaddr offset, unsigned int size)
-{
-    STM32F40xGPIOState *s = STM32F40x_GPIO(opaque);
-    uint64_t base_addr = s->mmio.addr;
+// static void update_output_irq(STM32F40xGPIOState *s, size_t i,
+//                               bool level)
+// {
+//     int64_t irq_level = connected ? level : -1;
+//     bool old_connected = extract32(s->old_out_connected, i, 1);
+//     bool old_level = extract32(s->old_out, i, 1);
 
-    uint64_t r = 0;
+//     if ((old_connected != connected) || (old_level != level))
+//     {
+//         qemu_set_irq(s->output[i], irq_level);
+//         trace_nrf51_gpio_update_output_irq(i, irq_level);
+//     }
 
-    switch (offset)
-    {
-    case STM32F40x_GPIO_REG_MODER:
-        r = s->MODER;
-        break;
-    case STM32F40x_GPIO_REG_OTYPE:
-        r = s->OTYPER;
-        break;
-    case STM32F40x_GPIO_REG_OSPEEDR:
-        r = s->OSPEEDR;
-        break;
-    case STM32F40x_GPIO_REG_PUPDR:
-        r = s->PUPDR;
-        break;
-    case STM32F40x_GPIO_REG_IDR:
-        r = s->IDR;
-        break;
-    case STM32F40x_GPIO_REG_ODR:
-        r = s->ODR;
-        break;
-    case STM32F40x_GPIO_REG_BSRR:
-        // Error read-only register
-        // returns 0
-        break;
-    case STM32F40x_GPIO_REG_LCKR:
-        r = s->LCKR;
-        break;
-    case STM32F40x_GPIO_REG_AFRL:
-        r = s->AFR[0];
-        break;
-    case STM32F40x_GPIO_REG_AFRH:
-        r = s->AFR[1];
-        break;
-
-    default:
-        qemu_log_mask(LOG_GUEST_ERROR,
-                      "%s: bad read offset 0x%" HWADDR_PRIx "\n",
-                      __func__, offset);
-    }
-
-    trace_stm32f40x_gpio_read(base_addr + offset, r);
-
-    return r;
-}
+//     s->old_out = deposit32(s->old_out, i, 1, level);
+//     s->old_out_connected = deposit32(s->old_out_connected, i, 1, connected);
+// }
 
 enum MODES
 {
@@ -101,21 +66,36 @@ static void set_masks(STM32F40xGPIOState *s)
 
 static void ODR_write(STM32F40xGPIOState *s, uint32_t value)
 {
+    uint32_t current = s->ODR;
+
     s->ODR &= ~(s->out_mask); // clear all output bits
     s->ODR |= (value & s->out_mask);
     s->IDR &= ~(s->out_mask); // clear all output bits
     s->IDR |= (value & s->out_mask);
+
+    uint64_t bit_changes = current ^ s->ODR;
+    trace_stm32f40x_gpio_update(bit_changes);
+    for (unsigned i = 0; i < 16; ++i)
+    {
+        if (bit_changes & 0x1)
+        {
+            int irq_level = (s->ODR >> i) & 0x1;
+            qemu_set_irq(s->output[i], irq_level);
+            trace_stm32f40x_gpio_update_output_irq(i, irq_level);
+        }
+        bit_changes >>= 1;
+    }
 }
 
 static void BRR_write(STM32F40xGPIOState *s, uint32_t value)
 {
     uint32_t set_values = value & 0xFFFF;
     uint32_t reset_values = (value >> 16) & 0xFFFF;
+    uint32_t current = s->ODR;
 
-    s->ODR &= ~(reset_values & s->out_mask);
-    s->ODR |= (set_values & s->out_mask);
-    s->IDR &= ~(reset_values & s->out_mask);
-    s->IDR |= (set_values & s->out_mask);
+    current &= ~(reset_values & s->out_mask);
+    current |= (set_values & s->out_mask);
+    ODR_write(s, current);
 }
 
 static void stm32f40x_gpio_write(void *opaque, hwaddr offset,
@@ -169,6 +149,58 @@ static void stm32f40x_gpio_write(void *opaque, hwaddr offset,
                       "%s: bad write offset 0x%" HWADDR_PRIx "\n",
                       __func__, offset);
     }
+}
+
+static uint64_t stm32f40x_gpio_read(void *opaque, hwaddr offset, unsigned int size)
+{
+    STM32F40xGPIOState *s = STM32F40x_GPIO(opaque);
+    uint64_t base_addr = s->mmio.addr;
+
+    uint64_t r = 0;
+
+    switch (offset)
+    {
+    case STM32F40x_GPIO_REG_MODER:
+        r = s->MODER;
+        break;
+    case STM32F40x_GPIO_REG_OTYPE:
+        r = s->OTYPER;
+        break;
+    case STM32F40x_GPIO_REG_OSPEEDR:
+        r = s->OSPEEDR;
+        break;
+    case STM32F40x_GPIO_REG_PUPDR:
+        r = s->PUPDR;
+        break;
+    case STM32F40x_GPIO_REG_IDR:
+        r = s->IDR;
+        break;
+    case STM32F40x_GPIO_REG_ODR:
+        r = s->ODR;
+        break;
+    case STM32F40x_GPIO_REG_BSRR:
+        // Error read-only register
+        // returns 0
+        break;
+    case STM32F40x_GPIO_REG_LCKR:
+        r = s->LCKR;
+        break;
+    case STM32F40x_GPIO_REG_AFRL:
+        r = s->AFR[0];
+        break;
+    case STM32F40x_GPIO_REG_AFRH:
+        r = s->AFR[1];
+        break;
+
+    default:
+        qemu_log_mask(LOG_GUEST_ERROR,
+                      "%s: bad read offset 0x%" HWADDR_PRIx "\n",
+                      __func__, offset);
+    }
+
+    trace_stm32f40x_gpio_read(base_addr + offset, r);
+
+    return r;
 }
 
 static const MemoryRegionOps gpio_ops = {
