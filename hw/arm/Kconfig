@@ -341,6 +341,7 @@ config STM32F407_SOC
     select STM32F4XX_SYSCFG
     select STM32F4XX_EXTI
     select STM32F40x_GPIO
+    select STM32F2XX_USART
 
 config XLNX_ZYNQMP_ARM
     bool
